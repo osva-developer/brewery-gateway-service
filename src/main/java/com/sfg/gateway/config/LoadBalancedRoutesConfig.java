@@ -7,22 +7,30 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
 
-@Profile("!local-discovery")
+@Profile("local-discovery")
 @Configuration
-public class LocalHostRouteConfig {
+public class LoadBalancedRoutesConfig {
 
     @Bean
-    public RouteLocator localHostRoutes(RouteLocatorBuilder builder){
+    public RouteLocator loadBalancedRoutes(RouteLocatorBuilder builder){
         return builder.routes()
                 .route(r -> r.path("/api/v1/beer*", "/api/v1/beer/*", "/api/v1/beerUpc/*")
-                        .uri("http://localhost:8080")
+                        .uri("lb://beer-service")
                         .id("beer-service"))
                 .route(r -> r.path("/api/v1/customers/**")
-                        .uri("http://localhost:8081")
+                        .uri("lb://order-service")
                         .id("order-service"))
                 .route(r -> r.path("/api/v1/beer/*/inventory")
-                        .uri("http://localhost:8082")
+                        .filters(f -> f.circuitBreaker(c -> c.setName("inventoryCB")
+                                        .setFallbackUri("forward:/inventory-failover")
+                                        .setRouteId("inv-failover")
+                                    ))
+                        .uri("lb://inventory-service")
                         .id("inventory-service"))
+                .route(r -> r.path("/inventory-failover/**")
+                        .uri("lb://inventory-failover")
+                        .id("inventory-failover-service"))
                 .build();
     }
+
 }
